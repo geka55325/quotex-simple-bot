@@ -3,14 +3,17 @@ services:
     name: quotex-bot
     runtime: python
     buildCommand: |
-      apt-get update -y && \
-      apt-get install -y chromium chromium-driver && \
+      apt-get update -qq && \
+      apt-get install -y wget unzip chromium chromium-driver && \
+      wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
+      dpkg -i google-chrome-stable_current_amd64.deb || apt-get install -f -y && \
+      rm google-chrome-stable_current_amd64.deb && \
       pip install --no-cache-dir -r requirements.txt
     startCommand: python bot.py
     envVars:
       - key: PYTHON_VERSION
         value: 3.11
       - key: CHROME_EXECUTABLE_PATH
-        value: /usr/bin/chromium-browser
+        value: /usr/bin/google-chrome
       - key: CHROMEDRIVER_EXECUTABLE_PATH
         value: /usr/bin/chromedriver
