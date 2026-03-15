@@ -3,7 +3,13 @@ services:
     name: quotex-bot
     runtime: python
     buildCommand: |
+      apt-get update -y && \
+      apt-get install -y wget unzip fontconfig libfontconfig1 libjpeg62-turbo libpng16-16 libx11-6 libxcb1 libxext6 libxrender1 xfonts-75dpi xfonts-base libgtk-3-0 libnss3 libgconf-2-4 libasound2 libdbus-glib-1-2 libxt6 && \
+      wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
+      dpkg -i google-chrome-stable_current_amd64.deb || apt-get install -f -y && \
+      rm google-chrome-stable_current_amd64.deb && \
       pip install -r requirements.txt
-      apt-get update
-      apt-get install -y chromium-browser
     startCommand: python bot.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
