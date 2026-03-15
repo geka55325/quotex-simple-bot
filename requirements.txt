@@ -1,3 +1,4 @@
 pandas
 ta
 quotexpy
+greenlet==3.0.3
