@@ -2,8 +2,9 @@ services:
   - type: web
     name: quotex-bot
     runtime: python
-    buildCommand: |
-      pip install -r requirements.txt
-      apt-get update
-      apt-get install -y chromium-browser
+    plan: free
+    buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
