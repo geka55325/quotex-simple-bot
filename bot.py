@@ -7,9 +7,9 @@ from datetime import datetime, timedelta
 from ta.momentum import RSIIndicator
 from ta.trend import MACD
 
-from quotexpy import Quotex
+from pyquotex import Quotex   # ← تأكد من الـ import الصحيح (pyquotex مش quotexpy)
 
-# ──────────────── إصلاح مشكلة Chrome على Render ────────────────
+# ──────────────── إصلاح مسارات المتصفح على Render ────────────────
 os.environ["CHROME_EXECUTABLE_PATH"] = "/usr/bin/chromium-browser"
 os.environ["CHROMEDRIVER_EXECUTABLE_PATH"] = "/usr/bin/chromedriver"
 
@@ -20,13 +20,12 @@ os.environ["CHROMEDRIVER_EXECUTABLE_PATH"] = "/usr/bin/chromedriver"
 EMAIL = os.environ.get("QUOTEX_EMAIL")
 PASSWORD = os.environ.get("QUOTEX_PASSWORD")
 
+if not EMAIL or not PASSWORD:
+    raise ValueError("QUOTEX_EMAIL أو QUOTEX_PASSWORD غير موجودين في Environment Variables")
+
 ACCOUNT_TYPE = "PRACTICE"
 
-ASSETS = [
-    "EURUSD",
-    "GBPUSD",
-    "GOLD"
-]
+ASSETS = ["EURUSD", "GBPUSD", "GOLD"]
 
 TIMEFRAME = 60
 EXPIRY = 60
@@ -67,10 +66,9 @@ def analyze_signal(df):
     last = df.iloc[-1]
     prev = df.iloc[-2]
 
-    rsi_value = last["rsi"] if "rsi" in last else None
-
-    macd_cross_up = (prev["macd"] < prev["signal"]) and (last["macd"] > last["signal"]) if "macd" in last and "signal" in last else False
-    macd_cross_down = (prev["macd"] > prev["signal"]) and (last["macd"] < last["signal"]) if "macd" in last and "signal" in last else False
+    rsi_value = last.get("rsi")
+    macd_cross_up = (prev.get("macd") < prev.get("signal")) and (last.get("macd") > last.get("signal"))
+    macd_cross_down = (prev.get("macd") > prev.get("signal")) and (last.get("macd") < last.get("signal"))
 
     if rsi_value is not None:
         if rsi_value < 40 and macd_cross_up:
@@ -104,14 +102,14 @@ def can_trade(asset):
 async def get_candles(client, asset):
     try:
         end = int(datetime.now().timestamp())
-        log(f"جاري جلب كاندلز لـ {asset} ...")
+        log(f"جاري جلب {CANDLE_COUNT} كاندل لـ {asset} ...")
 
-        candles = await client.get_candles(
-            asset,
-            TIMEFRAME,
-            CANDLE_COUNT,
-            end
-        )
+        # بعض الإصدارات من pyquotex مش async
+        try:
+            candles = await client.get_candles(asset, TIMEFRAME, CANDLE_COUNT, end)
+        except TypeError:
+            # لو مش async، نجرب بدون await
+            candles = client.get_candles(asset, TIMEFRAME, CANDLE_COUNT, end)
 
         if not candles:
             log(f"لا كاندلز مرجعة لـ {asset}")
@@ -119,7 +117,6 @@ async def get_candles(client, asset):
 
         df = pd.DataFrame(candles)
 
-        # طباعة أسماء الأعمدة عشان نعرف الهيكل
         log(f"أعمدة البيانات لـ {asset}: {list(df.columns)}")
 
         df.rename(columns={
@@ -147,17 +144,16 @@ async def get_candles(client, asset):
 
 async def open_trade(client, asset, direction):
     try:
-        log(f"فتح صفقة {asset} {direction.upper()} بمبلغ {TRADE_AMOUNT}")
+        log(f"فتح صفقة {asset} {direction.upper()} بـ ${TRADE_AMOUNT}")
 
-        status, trade = await client.trade(
-            direction,
-            TRADE_AMOUNT,
-            asset,
-            EXPIRY
-        )
+        # بعض الإصدارات مش async
+        try:
+            status, trade = await client.trade(direction, TRADE_AMOUNT, asset, EXPIRY)
+        except TypeError:
+            status, trade = client.trade(direction, TRADE_AMOUNT, asset, EXPIRY)
 
         if status:
-            log(f"تم فتح الصفقة بنجاح! ID = {trade}")
+            log(f"تم فتح الصفقة! ID = {trade}")
             cooldowns[asset] = datetime.now()
         else:
             log("فشل فتح الصفقة")
@@ -195,7 +191,7 @@ async def process_asset(client, asset):
 # =========================
 
 async def main_loop(client):
-    log("بدء الحلقة الرئيسية - مراقبة الأصول كل 10 ثوانٍ")
+    log("بدء الحلقة الرئيسية - فحص كل 10 ثوانٍ")
     while True:
         try:
             for asset in ASSETS:
@@ -208,26 +204,21 @@ async def main_loop(client):
 
 
 # =========================
-# CONNECT
+# CONNECT WITH TIMEOUT
 # =========================
 
 async def connect():
+    max_attempts = 10
     attempt = 0
-    while True:
+
+    while attempt < max_attempts:
         attempt += 1
         try:
-            log(f"محاولة الاتصال رقم {attempt}...")
-            log("جاري إنشاء كائن Quotex...")
+            log(f"محاولة اتصال رقم {attempt}/{max_attempts}")
 
-            client = Quotex(
-                email=EMAIL,
-                password=PASSWORD
-            )
+            client = Quotex(email=EMAIL, password=PASSWORD)
 
-            # تفعيل الـ debug للـ websocket
-            client.debug_ws_enable = True
-
-            log("جاري الاتصال بالمنصة...")
+            log("جاري الاتصال...")
             await client.connect()
 
             log("تم الاتصال بنجاح!")
@@ -235,14 +226,15 @@ async def connect():
             log("جاري تغيير نوع الحساب...")
             await client.change_account(ACCOUNT_TYPE)
 
-            log(f"تم تغيير الحساب إلى: {ACCOUNT_TYPE}")
+            log(f"الحساب الآن: {ACCOUNT_TYPE}")
             return client
 
         except Exception as e:
             log(f"فشل الاتصال في المحاولة {attempt}: {str(e)}")
             traceback.print_exc()
-            log("إعادة المحاولة بعد 5 ثوانٍ...")
             await asyncio.sleep(5)
+
+    raise ConnectionError(f"فشل الاتصال بعد {max_attempts} محاولة")
 
 
 # =========================
@@ -251,8 +243,12 @@ async def connect():
 
 async def main():
     log("تشغيل البوت...")
-    client = await connect()
-    await main_loop(client)
+    try:
+        client = await connect()
+        await main_loop(client)
+    except Exception as e:
+        log(f"خطأ كبير في التشغيل: {str(e)}")
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
