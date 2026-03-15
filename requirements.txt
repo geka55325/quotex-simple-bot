@@ -1,5 +1,3 @@
 pandas
 ta
-pyquotex
-# لو استخدمت مكتبة تانية غير pyquotex → غيرها هنا
-# مثال: quotexpy
+quotexpy
