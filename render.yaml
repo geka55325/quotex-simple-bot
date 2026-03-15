@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: quotex-bot
+    runtime: python
+    buildCommand: |
+      pip install -r requirements.txt
+      apt-get update
+      apt-get install -y chromium-browser
+    startCommand: python bot.py
