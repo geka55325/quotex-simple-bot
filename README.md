@@ -1,1 +1,0 @@
-# quotex-simple-bot
